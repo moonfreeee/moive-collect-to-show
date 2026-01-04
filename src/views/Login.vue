@@ -36,13 +36,35 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const username = ref('')
 const password = ref('')
 const loginError = ref(false)
 const router = useRouter()
+
+// 初始化测试账号（只在第一次运行时添加）
+onMounted(() => {
+  let users = JSON.parse(localStorage.getItem('users') || '[]')
+  // 检查是否已有测试账号
+  const hasTestUser = users.some(u => u.username === 'test')
+  if (!hasTestUser) {
+    users.push({ 
+      username: 'test', 
+      password: '123456',
+      avatar: '/aka.jpg'  // 测试账号默认头像
+    })
+    localStorage.setItem('users', JSON.stringify(users))
+  } else {
+    // 如果测试账号已存在但没有头像，添加默认头像
+    const testUser = users.find(u => u.username === 'test')
+    if (testUser && !testUser.avatar) {
+      testUser.avatar = '/aka.jpg'
+      localStorage.setItem('users', JSON.stringify(users))
+    }
+  }
+})
 
 const handleLogin = () => {
   loginError.value = false
@@ -54,8 +76,10 @@ const handleLogin = () => {
   const user = users.find(u => u.username === username.value && u.password === password.value)
 
   if (user) {
+    // 保存当前登录用户信息
+    localStorage.setItem('currentUser', JSON.stringify(user))
     alert('登录成功！')
-    router.push('/dashboard')  // Jump to blank dashboard page
+    router.push('/dashboard')
   } else {
     loginError.value = true
   }

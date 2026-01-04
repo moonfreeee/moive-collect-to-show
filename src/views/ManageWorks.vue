@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard">
+  <div class="manage-works-page">
     <!-- 顶部Header -->
     <header class="top-header">
       <div class="header-left">
@@ -17,43 +17,58 @@
           <div v-else class="avatar-placeholder">👤</div>
         </div>
         <button v-else class="login-link-btn" @click="goToLogin">登录</button>
-        <button v-if="isLoggedIn" class="upload-btn" @click="goToUpload">
-          <span class="upload-icon">↑</span>
-          上传作品
+        <button class="site-btn" @click="goToHome">
+          <span class="site-icon">🌐</span>
+          M 本站
         </button>
       </div>
     </header>
 
-    <!-- 导航栏 -->
-    <nav class="main-nav">
-      <router-link to="/dashboard" class="nav-item active">
-        <span class="nav-icon">M</span>
-        首页
-      </router-link>
-      <a href="#" class="nav-item">UI设计作品</a>
-      <a href="#" class="nav-item">动画</a>
-      <a href="#" class="nav-item">视频剪辑</a>
-      <a href="#" class="nav-item">竞赛</a>
-      <a href="#" class="nav-item">软件</a>
-      <a href="#" class="nav-item">声音</a>
-      <a href="#" class="nav-item">绘画</a>
-      <button class="material-library-btn">素材库</button>
-    </nav>
-
     <!-- 主要内容区域 -->
     <main class="main-content">
-      <h2 class="section-title">推荐</h2>
-      <div class="content-grid">
-        <div v-for="item in contentItems" :key="item.id" class="content-card" @click="goToVideo(item.id)">
-          <div class="card-thumbnail">
-            <img :src="item.cover || '/back.jpeg'" alt="作品封面" />
+      <div class="content-wrapper">
+        <!-- 左侧导航栏 -->
+        <nav class="sidebar-nav">
+          <router-link to="/upload" class="nav-item">投稿</router-link>
+          <router-link to="/manage" class="nav-item active">管理作品</router-link>
+          <a href="#" class="nav-item">评论管理</a>
+        </nav>
+
+        <!-- 右侧内容区 -->
+        <div class="content-area">
+          <h1 class="section-title">作品管理</h1>
+
+          <!-- 分类标签 -->
+          <div class="tabs">
+            <button 
+              v-for="tab in tabs" 
+              :key="tab.id"
+              class="tab-item"
+              :class="{ active: activeTab === tab.id }"
+              @click="activeTab = tab.id"
+            >
+              {{ tab.name }}
+            </button>
           </div>
-          <div class="card-info">
-            <div class="card-title">
-              <span class="content-icon">{{ item.icon }}</span>
-              <span>{{ item.type }}: {{ item.title }}</span>
+
+          <!-- 作品列表 -->
+          <div class="works-grid">
+            <div 
+              v-for="work in filteredWorks" 
+              :key="work.id" 
+              class="work-card"
+              @click="goToVideo(work.id)"
+            >
+              <div class="work-thumbnail">
+                <img :src="work.cover" alt="作品封面" />
+              </div>
+              <div class="work-info">
+                <div class="work-title">{{ work.title }}</div>
+              </div>
             </div>
-            <div class="card-category">分类: {{ item.category }}</div>
+            <div v-if="filteredWorks.length === 0" class="empty-state">
+              <p>暂无作品</p>
+            </div>
           </div>
         </div>
       </div>
@@ -62,23 +77,25 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const isLoggedIn = ref(false)
 const currentUser = ref(null)
+const activeTab = ref('video')
+const works = ref([])
 
-const contentItems = ref([
-  { id: 1, icon: '🎬', type: '动画', title: 'test001', category: '动画' },
-  { id: 2, icon: '📷', type: '摄影', title: 'test001', category: '摄影' },
-  { id: 3, icon: '🎨', type: 'UI设计', title: 'test001', category: 'UI设计' },
-  { id: 4, icon: '🏆', type: '竞赛', title: 'test001', category: '竞赛' },
-  { id: 5, icon: '💻', type: '软件', title: 'test001', category: '软件' },
-  { id: 6, icon: '🖼️', type: '绘画', title: 'test001', category: '绘画' },
-  { id: 7, icon: '✂️', type: '视频剪辑', title: 'test001', category: '剪辑' },
-  { id: 8, icon: '🎵', type: '音乐', title: 'test001', category: '声音' }
-])
+const tabs = [
+  { id: 'video', name: '视频稿件' },
+  { id: 'graphic', name: '图文稿件' },
+  { id: 'software', name: '软件稿件' },
+  { id: 'audio', name: '音频稿件' }
+]
+
+const filteredWorks = computed(() => {
+  return works.value.filter(work => work.type === activeTab.value)
+})
 
 onMounted(() => {
   // 检查是否已登录
@@ -86,45 +103,34 @@ onMounted(() => {
   if (loggedInUser) {
     currentUser.value = JSON.parse(loggedInUser)
     isLoggedIn.value = true
+    
+    // 加载当前用户的作品
+    loadWorks()
   } else {
     isLoggedIn.value = false
+    router.push('/login')
   }
-  
-  // 加载上传的作品
-  loadWorks()
 })
 
 const loadWorks = () => {
   const allWorks = JSON.parse(localStorage.getItem('works') || '[]')
-  // 如果有上传的作品，添加到内容列表中
-  if (allWorks.length > 0) {
-    const workItems = allWorks.map(work => ({
-      id: work.id,
-      icon: work.type === 'video' ? '🎬' : work.type === 'software' ? '💻' : work.type === 'graphic' ? '🎨' : '🎵',
-      type: work.type === 'video' ? '视频' : work.type === 'software' ? '软件' : work.type === 'graphic' ? '图文' : '音频',
-      title: work.title,
-      category: work.tags?.[0] || '未分类',
-      cover: work.cover
-    }))
-    // 合并到现有内容中
-    contentItems.value = [...contentItems.value, ...workItems]
-  }
-}
-
-const goToLogin = () => {
-  router.push('/login')
-}
-
-const goToUpload = () => {
-  router.push('/upload')
+  // 只显示当前用户的作品
+  works.value = allWorks.filter(work => work.author === currentUser.value.username)
 }
 
 const goToVideo = (id) => {
   router.push(`/video/${id}`)
 }
 
+const goToHome = () => {
+  router.push('/dashboard')
+}
+
+const goToLogin = () => {
+  router.push('/login')
+}
+
 const handleAvatarClick = () => {
-  // 可以在这里添加用户菜单功能
   console.log('点击了用户头像')
 }
 </script>
@@ -136,13 +142,13 @@ const handleAvatarClick = () => {
   box-sizing: border-box;
 }
 
-.dashboard {
+.manage-works-page {
   min-height: 100vh;
   background-color: #DCE2FC;
   font-family: 'Noto Sans SC', sans-serif;
 }
 
-/* 顶部Header */
+/* 顶部Header - 与Upload.vue相同 */
 .top-header {
   display: flex;
   align-items: center;
@@ -162,7 +168,6 @@ const handleAvatarClick = () => {
   width: 150px;
   height: auto;
 }
-
 
 .header-center {
   flex: 1;
@@ -244,53 +249,62 @@ const handleAvatarClick = () => {
   color: #fff;
 }
 
-.upload-btn {
+.site-btn {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background-color: #09147D;
-  color: #fff;
-  border: none;
+  background-color: transparent;
+  color: #09147D;
+  border: 1px solid #09147D;
   border-radius: 25px;
   font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
 }
 
-.upload-btn:hover {
-  background-color: #575CF2;
+.site-btn:hover {
+  background-color: #09147D;
+  color: #fff;
 }
 
-.upload-icon {
+.site-icon {
   font-size: 18px;
 }
 
-/* 导航栏 */
-.main-nav {
+/* 主要内容区域 */
+.main-content {
+  padding: 40px 60px;
+}
+
+.content-wrapper {
   display: flex;
-  align-items: center;
-  padding: 15px 60px;
-  background-color: #fff;
-  border-bottom: 1px solid #e0e0e0;
   gap: 30px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* 左侧导航栏 */
+.sidebar-nav {
+  width: 200px;
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 20px 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  height: fit-content;
 }
 
 .nav-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  display: block;
+  padding: 15px 30px;
+  color: #000;
   text-decoration: none;
-  color: #666;
   font-size: 16px;
-  border-radius: 20px;
   transition: all 0.3s;
 }
 
 .nav-item:hover {
   background-color: #f5f5f5;
-  color: #09147D;
 }
 
 .nav-item.active {
@@ -299,31 +313,13 @@ const handleAvatarClick = () => {
   font-weight: bold;
 }
 
-.nav-icon {
-  font-weight: bold;
-  font-size: 18px;
-}
-
-.material-library-btn {
-  margin-left: auto;
-  padding: 8px 20px;
-  background-color: #f5f5f5;
-  border: none;
-  border-radius: 20px;
-  font-size: 16px;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.material-library-btn:hover {
-  background-color: #e0e0e0;
-  color: #09147D;
-}
-
-/* 主要内容区域 */
-.main-content {
-  padding: 40px 60px;
+/* 右侧内容区 */
+.content-area {
+  flex: 1;
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .section-title {
@@ -333,13 +329,45 @@ const handleAvatarClick = () => {
   margin-bottom: 30px;
 }
 
-.content-grid {
+/* 分类标签 */
+.tabs {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 30px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 10px;
+}
+
+.tab-item {
+  padding: 10px 20px;
+  background-color: transparent;
+  border: none;
+  font-size: 16px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -12px;
+}
+
+.tab-item:hover {
+  color: #09147D;
+}
+
+.tab-item.active {
+  color: #09147D;
+  border-bottom-color: #DCE2FC;
+  font-weight: bold;
+}
+
+/* 作品网格 */
+.works-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 30px;
 }
 
-.content-card {
+.work-card {
   background-color: #fff;
   border-radius: 12px;
   overflow: hidden;
@@ -348,56 +376,59 @@ const handleAvatarClick = () => {
   cursor: pointer;
 }
 
-.content-card:hover {
+.work-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
-.card-thumbnail {
+.work-thumbnail {
   width: 100%;
-  height: 200px;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   background-color: #f0f0f0;
 }
 
-.card-thumbnail img {
+.work-thumbnail img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.card-info {
+.work-info {
   padding: 15px;
 }
 
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.work-title {
   font-size: 16px;
+  font-weight: bold;
   color: #000;
-  margin-bottom: 8px;
 }
 
-.content-icon {
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
   font-size: 18px;
 }
 
-.card-category {
-  font-size: 14px;
-  color: #666;
-}
-
 /* 响应式设计 */
-@media (max-width: 1200px) {
-  .content-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
 @media (max-width: 768px) {
-  .content-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .main-content {
+    padding: 20px;
+  }
+  
+  .content-wrapper {
+    flex-direction: column;
+  }
+  
+  .sidebar-nav {
+    width: 100%;
+  }
+  
+  .works-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 20px;
   }
   
   .top-header {
@@ -409,22 +440,6 @@ const handleAvatarClick = () => {
     order: 3;
     width: 100%;
     margin: 10px 0 0 0;
-  }
-  
-  .main-nav {
-    padding: 10px 20px;
-    flex-wrap: wrap;
-    gap: 15px;
-  }
-  
-  .main-content {
-    padding: 20px;
-  }
-}
-
-@media (max-width: 480px) {
-  .content-grid {
-    grid-template-columns: 1fr;
   }
 }
 </style>

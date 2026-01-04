@@ -49,9 +49,22 @@ const router = useRouter()
 // 初始化测试账号（只在第一次运行时添加）
 onMounted(() => {
   let users = JSON.parse(localStorage.getItem('users') || '[]')
-  if (users.length === 0) {
-    users.push({ username: 'test', password: '123456' })  // 测试账号：test / 123456
+  // 检查是否已有测试账号
+  const hasTestUser = users.some(u => u.username === 'test')
+  if (!hasTestUser) {
+    users.push({ 
+      username: 'test', 
+      password: '123456',
+      avatar: '/aka.jpg'  // 测试账号默认头像
+    })
     localStorage.setItem('users', JSON.stringify(users))
+  } else {
+    // 如果测试账号已存在但没有头像，添加默认头像
+    const testUser = users.find(u => u.username === 'test')
+    if (testUser && !testUser.avatar) {
+      testUser.avatar = '/aka.jpg'
+      localStorage.setItem('users', JSON.stringify(users))
+    }
   }
 })
 
@@ -85,8 +98,12 @@ const handleRegister = () => {
     return
   }
 
-  // 保存新账号
-  users.push({ username: username.value, password: password.value })
+  // 保存新账号，设置默认头像
+  users.push({ 
+    username: username.value, 
+    password: password.value,
+    avatar: '/aka.jpg'  // 新用户默认头像
+  })
   localStorage.setItem('users', JSON.stringify(users))
   alert('注册成功！请登录')
   router.push('/login')
