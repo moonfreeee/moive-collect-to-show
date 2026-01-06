@@ -167,7 +167,7 @@ const graphicTitle = ref('')
 const graphicContent = ref('')
 const uploadedImages = ref([])
 const selectedCategory = ref('')
-const graphicCategories = ['UI设计', '绘画', '其它']
+const graphicCategories = ['UI设计', '绘画', '游戏', '竞赛项目', '其它']
 const tags = ref([])
 const showAddTag = ref(false)
 const newTag = ref('')
@@ -262,6 +262,28 @@ const submitGraphic = async () => {
 
   const workId = Date.now()
 
+  // 使用IndexedDB存储封面图片
+  let coverStored = false
+  let coverUrl = '/back.jpeg' // 默认封面
+  if (coverPreview.value && coverPreview.value !== '/back.jpeg' && coverPreview.value.startsWith('data:')) {
+    try {
+      if (!window.indexedDB) {
+        throw new Error('浏览器不支持IndexedDB')
+      }
+      const { saveCoverToDB } = await import('@/utils/storage')
+      await saveCoverToDB(workId, coverPreview.value)
+      coverStored = true
+      coverUrl = '' // 标记为已存储，不保存 base64 到 localStorage
+    } catch (error) {
+      console.error('保存封面到IndexedDB失败:', error)
+      // 如果封面存储失败，使用默认封面
+      coverUrl = '/back.jpeg'
+    }
+  } else if (coverPreview.value && !coverPreview.value.startsWith('data:')) {
+    // 如果是文件路径，直接使用
+    coverUrl = coverPreview.value
+  }
+
   // 使用IndexedDB存储图片
   let imagesStored = false
   if (uploadedImages.value.length > 0) {
@@ -294,7 +316,8 @@ const submitGraphic = async () => {
     content: graphicContent.value.trim(),
     author: user.username,
     authorAvatar: user.avatar || '/aka.jpg',
-    cover: coverPreview.value || '/back.jpeg',
+    cover: coverUrl, // 如果是空字符串，表示封面已存储在 IndexedDB
+    coverStored: coverStored, // 标记封面是否已存储到IndexedDB
     imageCount: uploadedImages.value.length, // 保存图片数量
     imagesStored: imagesStored, // 标记图片是否已存储到IndexedDB
     tags: finalTags,

@@ -158,6 +158,22 @@ const loadGraphicInfo = async () => {
     
     if (work && work.type === 'graphic') {
       let images = []
+      let cover = '/back.jpeg'
+      
+      // 如果封面存储在IndexedDB中
+      if (work.coverStored) {
+        try {
+          const { getCoverFromDB } = await import('@/utils/storage')
+          const coverUrl = await getCoverFromDB(work.id)
+          if (coverUrl) {
+            cover = coverUrl
+          }
+        } catch (error) {
+          console.error('加载封面失败:', error)
+        }
+      } else if (work.cover) {
+        cover = work.cover
+      }
       
       // 如果图片存储在IndexedDB中
       if (work.imagesStored && work.imageCount > 0) {
@@ -179,7 +195,7 @@ const loadGraphicInfo = async () => {
         author: work.author,
         authorName: work.author,
         authorAvatar: work.authorAvatar || '/aka.jpg',
-        cover: work.cover || '/back.jpeg',
+        cover: cover,
         content: work.content || '',
         images: images,
         publishTime: work.createdAt ? new Date(work.createdAt).toLocaleString('zh-CN', {

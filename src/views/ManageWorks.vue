@@ -92,9 +92,7 @@ const works = ref([])
 
 const tabs = [
   { id: 'video', name: '视频稿件' },
-  { id: 'graphic', name: '图文稿件' },
-  { id: 'software', name: '软件稿件' },
-  { id: 'audio', name: '音频稿件' }
+  { id: 'graphic', name: '图文稿件' }
 ]
 
 const filteredWorks = computed(() => {
@@ -123,10 +121,26 @@ watch(() => route.path, (newPath) => {
   }
 })
 
-const loadWorks = () => {
+const loadWorks = async () => {
   const allWorks = JSON.parse(localStorage.getItem('works') || '[]')
   // 只显示当前用户的作品
-  works.value = allWorks.filter(work => work.author === currentUser.value.username)
+  const userWorks = allWorks.filter(work => work.author === currentUser.value.username)
+  
+  // 为每个作品加载封面（如果存储在 IndexedDB 中）
+  works.value = await Promise.all(userWorks.map(async (work) => {
+    if (work.coverStored) {
+      try {
+        const { getCoverFromDB } = await import('@/utils/storage')
+        const coverUrl = await getCoverFromDB(work.id)
+        if (coverUrl) {
+          return { ...work, cover: coverUrl }
+        }
+      } catch (error) {
+        console.error('加载封面失败:', error)
+      }
+    }
+    return work
+  }))
 }
 
 const deleteWork = async (workId, event) => {
@@ -152,6 +166,16 @@ const deleteWork = async (workId, event) => {
         await deleteImagesFromDB(workId)
       } catch (error) {
         console.error('删除图片失败:', error)
+      }
+    }
+    
+    // 如果封面存储在IndexedDB中，删除它
+    if (work && work.coverStored) {
+      try {
+        const { deleteCoverFromDB } = await import('@/utils/storage')
+        await deleteCoverFromDB(workId)
+      } catch (error) {
+        console.error('删除封面失败:', error)
       }
     }
     

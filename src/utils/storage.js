@@ -2,11 +2,12 @@
 export const dbName = 'movieDisplayDB'
 export const videoStoreName = 'videos'
 export const imageStoreName = 'images'
+export const coverStoreName = 'covers'
 
 // 初始化数据库
 export function initDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 2) // 升级版本号
+    const request = indexedDB.open(dbName, 3) // 升级版本号到3，添加封面存储
 
     request.onerror = () => reject(request.error)
     request.onsuccess = () => resolve(request.result)
@@ -30,6 +31,11 @@ export function initDB() {
         if (!imageStore.indexNames.contains('workId')) {
           imageStore.createIndex('workId', 'workId', { unique: false })
         }
+      }
+      
+      // 创建封面存储
+      if (!db.objectStoreNames.contains(coverStoreName)) {
+        db.createObjectStore(coverStoreName, { keyPath: 'workId' })
       }
     }
   })
@@ -233,6 +239,93 @@ export async function deleteImagesFromDB(workId) {
     }
     request.onerror = () => reject(request.error)
     transaction.onerror = () => reject(transaction.error)
+  })
+}
+
+// 保存封面图片到IndexedDB
+export async function saveCoverToDB(workId, coverData) {
+  const db = await initDB()
+  
+  // 如果 coverData 是 base64 字符串，转换为 ArrayBuffer
+  let arrayBuffer
+  let mimeType = 'image/jpeg'
+  
+  if (typeof coverData === 'string') {
+    if (coverData.startsWith('data:')) {
+      // base64 格式: data:image/jpeg;base64,/9j/4AAQ...
+      mimeType = coverData.match(/data:([^;]+);/)?.[1] || 'image/jpeg'
+      const base64 = coverData.split(',')[1] || coverData
+      const binaryString = atob(base64)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      arrayBuffer = bytes.buffer
+    } else {
+      // 如果是文件路径，不需要存储
+      return Promise.resolve()
+    }
+  } else if (coverData instanceof File) {
+    // 如果是文件对象，读取为 ArrayBuffer
+    arrayBuffer = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target.result)
+      reader.onerror = () => reject(reader.error)
+      reader.readAsArrayBuffer(coverData)
+    })
+    mimeType = coverData.type || 'image/jpeg'
+  } else {
+    // 如果已经是 ArrayBuffer
+    arrayBuffer = coverData
+  }
+  
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([coverStoreName], 'readwrite')
+    const store = transaction.objectStore(coverStoreName)
+    
+    const request = store.put({
+      workId: workId,
+      data: arrayBuffer,
+      mimeType: mimeType
+    })
+    
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error)
+    transaction.onerror = () => reject(transaction.error)
+  })
+}
+
+// 从IndexedDB读取封面图片
+export async function getCoverFromDB(workId) {
+  const db = await initDB()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([coverStoreName], 'readonly')
+    const store = transaction.objectStore(coverStoreName)
+    const request = store.get(workId)
+    
+    request.onsuccess = () => {
+      if (request.result) {
+        const blob = new Blob([request.result.data], { type: request.result.mimeType })
+        const url = URL.createObjectURL(blob)
+        resolve(url)
+      } else {
+        resolve(null)
+      }
+    }
+    request.onerror = () => reject(request.error)
+  })
+}
+
+// 删除IndexedDB中的封面图片
+export async function deleteCoverFromDB(workId) {
+  const db = await initDB()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([coverStoreName], 'readwrite')
+    const store = transaction.objectStore(coverStoreName)
+    const request = store.delete(workId)
+    
+    request.onsuccess = () => resolve()
+    request.onerror = () => reject(request.error)
   })
 }
 

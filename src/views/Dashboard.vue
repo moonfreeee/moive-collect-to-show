@@ -26,26 +26,28 @@
 
     <!-- 导航栏 -->
     <nav class="main-nav">
-      <router-link to="/dashboard" class="nav-item active">
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === null }" @click.prevent="selectCategory(null)">
         <span class="nav-icon">M</span>
         首页
-      </router-link>
-      <a href="#" class="nav-item">UI设计作品</a>
-      <a href="#" class="nav-item">动画</a>
-      <a href="#" class="nav-item">视频剪辑</a>
-      <a href="#" class="nav-item">竞赛</a>
-      <a href="#" class="nav-item">软件</a>
-      <a href="#" class="nav-item">声音</a>
-      <a href="#" class="nav-item">绘画</a>
+      </a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === 'UI设计' }" @click.prevent="selectCategory('UI设计')">UI设计作品</a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === '动画' }" @click.prevent="selectCategory('动画')">动画</a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === '视频剪辑' }" @click.prevent="selectCategory('视频剪辑')">视频剪辑</a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === '摄影' }" @click.prevent="selectCategory('摄影')">摄影</a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === '竞赛项目' }" @click.prevent="selectCategory('竞赛项目')">竞赛</a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === '游戏' }" @click.prevent="selectCategory('游戏')">游戏</a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === '音乐' }" @click.prevent="selectCategory('音乐')">音乐</a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === '声效' }" @click.prevent="selectCategory('声效')">声效</a>
+      <a href="#" class="nav-item" :class="{ active: selectedCategory === '绘画' }" @click.prevent="selectCategory('绘画')">绘画</a>
       <button class="material-library-btn">素材库</button>
     </nav>
 
     <!-- 主要内容区域 -->
     <main class="main-content">
-      <h2 class="section-title">推荐</h2>
+      <h2 class="section-title">{{ selectedCategory ? selectedCategory : '推荐' }}</h2>
       <div class="content-grid">
         <div 
-          v-for="item in contentItems" 
+          v-for="item in filteredItems" 
           :key="item.id" 
           class="content-card"
           :class="{ 'clickable': canPlayVideo(item.category) || canViewGraphic(item.category) }"
@@ -68,23 +70,36 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const isLoggedIn = ref(false)
 const currentUser = ref(null)
+const selectedCategory = ref(null)
 
 const contentItems = ref([
   { id: 1, icon: '🎬', type: '动画', title: 'test001', category: '动画' },
   { id: 2, icon: '📷', type: '摄影', title: 'test001', category: '摄影' },
   { id: 3, icon: '🎨', type: 'UI设计', title: 'test001', category: 'UI设计' },
-  { id: 4, icon: '🏆', type: '竞赛', title: 'test001', category: '竞赛' },
+  { id: 4, icon: '🏆', type: '竞赛', title: 'test001', category: '竞赛项目' },
   { id: 5, icon: '💻', type: '软件', title: 'test001', category: '软件' },
   { id: 6, icon: '🖼️', type: '绘画', title: 'test001', category: '绘画' },
-  { id: 7, icon: '✂️', type: '视频剪辑', title: 'test001', category: '剪辑' },
-  { id: 8, icon: '🎵', type: '音乐', title: 'test001', category: '声音' }
+  { id: 7, icon: '✂️', type: '视频剪辑', title: 'test001', category: '视频剪辑' },
+  { id: 8, icon: '🎵', type: '音乐', title: 'test001', category: '音乐' }
 ])
+
+// 根据选中的分类过滤作品
+const filteredItems = computed(() => {
+  if (selectedCategory.value === null) {
+    return contentItems.value
+  }
+  return contentItems.value.filter(item => item.category === selectedCategory.value)
+})
+
+const selectCategory = (category) => {
+  selectedCategory.value = category
+}
 
 onMounted(() => {
   // 检查是否已登录
@@ -126,28 +141,50 @@ const initOfficialGraphic = () => {
   }
 }
 
-const loadWorks = () => {
+const loadWorks = async () => {
   const allWorks = JSON.parse(localStorage.getItem('works') || '[]')
   // 如果有上传的作品，添加到内容列表中
   if (allWorks.length > 0) {
-    const workItems = allWorks.map(work => {
+    // 为每个作品加载封面（如果存储在 IndexedDB 中）
+    const worksWithCovers = await Promise.all(allWorks.map(async (work) => {
+      let cover = work.cover || '/back.jpeg'
+      if (work.coverStored) {
+        try {
+          const { getCoverFromDB } = await import('@/utils/storage')
+          const coverUrl = await getCoverFromDB(work.id)
+          if (coverUrl) {
+            cover = coverUrl
+          }
+        } catch (error) {
+          console.error('加载封面失败:', error)
+        }
+      }
+      return { ...work, cover }
+    }))
+    
+    const workItems = worksWithCovers.map(work => {
       // 根据作品类型和标签确定分类
       let category = work.tags?.[0] || '未分类'
       // 如果是视频类型，确保分类正确
       if (work.type === 'video') {
-        // 如果标签中包含剪辑、动画、摄影等，使用该标签作为分类
-        if (work.tags && work.tags.some(tag => ['剪辑', '动画', '摄影'].includes(tag))) {
-          category = work.tags.find(tag => ['剪辑', '动画', '摄影'].includes(tag))
+        // 视频类分类：动画、摄影、视频剪辑、游戏、竞赛项目、音乐、声效
+        const videoCategories = ['动画', '摄影', '视频剪辑', '游戏', '竞赛项目', '音乐', '声效']
+        if (work.tags && work.tags.some(tag => videoCategories.includes(tag))) {
+          category = work.tags.find(tag => videoCategories.includes(tag))
         } else {
-          category = '剪辑' // 默认分类为剪辑
+          category = '视频剪辑' // 默认分类为视频剪辑
         }
       }
       // 如果是图文类型，根据标签确定分类
       else if (work.type === 'graphic') {
-        if (work.tags && work.tags.some(tag => ['UI设计', '绘画'].includes(tag))) {
-          category = work.tags.find(tag => ['UI设计', '绘画'].includes(tag))
+        // 图文类分类：UI设计、绘画、游戏、竞赛项目
+        const graphicCategories = ['UI设计', '绘画', '游戏', '竞赛项目']
+        if (work.tags && work.tags.some(tag => graphicCategories.includes(tag))) {
+          category = work.tags.find(tag => graphicCategories.includes(tag))
         } else if (work.id === 'official') {
           category = 'UI设计' // 官方作品默认显示在UI设计分类
+        } else {
+          category = 'UI设计' // 默认分类为UI设计
         }
       }
       
@@ -167,13 +204,15 @@ const loadWorks = () => {
 }
 
 const canPlayVideo = (category) => {
-  // 只有动画、摄影、视频剪辑分类可以播放视频
-  return category === '动画' || category === '摄影' || category === '剪辑'
+  // 视频类分类：动画、摄影、视频剪辑、游戏、竞赛项目、音乐、声效
+  const videoCategories = ['动画', '摄影', '视频剪辑', '游戏', '竞赛项目', '音乐', '声效']
+  return videoCategories.includes(category)
 }
 
 const canViewGraphic = (category) => {
-  // 绘画和UI设计分类可以查看图文
-  return category === '绘画' || category === 'UI设计'
+  // 图文类分类：UI设计、绘画、游戏、竞赛项目
+  const graphicCategories = ['UI设计', '绘画', '游戏', '竞赛项目']
+  return graphicCategories.includes(category)
 }
 
 const handleCardClick = (item) => {
@@ -186,6 +225,7 @@ const handleCardClick = (item) => {
     goToGraphic(item.id)
   } else {
     // 其他类型根据分类判断（兼容测试数据）
+    // 游戏和竞赛项目需要根据实际作品类型判断，这里优先按分类判断
     if (canPlayVideo(item.category)) {
       goToVideo(item.id)
     } else if (canViewGraphic(item.category)) {

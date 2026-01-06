@@ -79,9 +79,7 @@ const step = ref('select')
 
 const workTypes = [
   { id: 'video', name: '视频类作品', desc: '如视频剪辑、动画制作', icon: '🎬' },
-  { id: 'software', name: '软件类作品', desc: '如游戏、竞赛项目', icon: '💻' },
-  { id: 'graphic', name: '图文类作品', desc: '如UI设计、绘画', icon: '🎨' },
-  { id: 'audio', name: '音频作品', desc: '如音乐、声效', icon: '🎵' }
+  { id: 'graphic', name: '图文类作品', desc: '如UI设计、绘画', icon: '🎨' }
 ]
 
 onMounted(() => {
