@@ -57,10 +57,13 @@
               v-for="work in filteredWorks" 
               :key="work.id" 
               class="work-card"
-              @click="goToVideo(work.id)"
+              @click="goToWork(work)"
             >
               <div class="work-thumbnail">
                 <img :src="work.cover" alt="作品封面" />
+                <button class="delete-btn" @click="deleteWork(work.id, $event)" title="删除作品">
+                  ×
+                </button>
               </div>
               <div class="work-info">
                 <div class="work-title">{{ work.title }}</div>
@@ -77,10 +80,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 const isLoggedIn = ref(false)
 const currentUser = ref(null)
 const activeTab = ref('video')
@@ -112,14 +116,59 @@ onMounted(() => {
   }
 })
 
+// 监听路由变化，当进入管理页面时重新加载作品
+watch(() => route.path, (newPath) => {
+  if (newPath === '/manage' && currentUser.value) {
+    loadWorks()
+  }
+})
+
 const loadWorks = () => {
   const allWorks = JSON.parse(localStorage.getItem('works') || '[]')
   // 只显示当前用户的作品
   works.value = allWorks.filter(work => work.author === currentUser.value.username)
 }
 
-const goToVideo = (id) => {
-  router.push(`/video/${id}`)
+const deleteWork = async (workId, event) => {
+  event.stopPropagation() // 阻止触发卡片点击事件
+  if (confirm('确定要删除这个作品吗？')) {
+    const allWorks = JSON.parse(localStorage.getItem('works') || '[]')
+    const work = allWorks.find(w => w.id === workId)
+    
+    // 如果视频存储在IndexedDB中，删除它
+    if (work && work.videoStored) {
+      try {
+        const { deleteVideoFromDB } = await import('@/utils/storage')
+        await deleteVideoFromDB(workId)
+      } catch (error) {
+        console.error('删除视频失败:', error)
+      }
+    }
+    
+    // 如果图片存储在IndexedDB中，删除它们
+    if (work && work.imagesStored) {
+      try {
+        const { deleteImagesFromDB } = await import('@/utils/storage')
+        await deleteImagesFromDB(workId)
+      } catch (error) {
+        console.error('删除图片失败:', error)
+      }
+    }
+    
+    const updatedWorks = allWorks.filter(work => work.id !== workId)
+    localStorage.setItem('works', JSON.stringify(updatedWorks))
+    // 重新加载作品列表
+    loadWorks()
+  }
+}
+
+const goToWork = (work) => {
+  // 根据作品类型跳转到不同页面
+  if (work.type === 'video') {
+    router.push(`/video/${work.id}`)
+  } else if (work.type === 'graphic') {
+    router.push(`/graphic/${work.id}`)
+  }
 }
 
 const goToHome = () => {
@@ -131,7 +180,9 @@ const goToLogin = () => {
 }
 
 const handleAvatarClick = () => {
-  console.log('点击了用户头像')
+  if (currentUser.value) {
+    router.push(`/profile/${currentUser.value.username}`)
+  }
 }
 </script>
 
@@ -386,12 +437,42 @@ const handleAvatarClick = () => {
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background-color: #f0f0f0;
+  position: relative;
 }
 
 .work-thumbnail img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: rgba(255, 0, 0, 0.8);
+  color: #fff;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  opacity: 0;
+}
+
+.work-card:hover .delete-btn {
+  opacity: 1;
+}
+
+.delete-btn:hover {
+  background-color: rgba(255, 0, 0, 1);
+  transform: scale(1.1);
 }
 
 .work-info {

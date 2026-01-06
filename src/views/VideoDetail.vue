@@ -32,7 +32,16 @@
           <h1 class="video-title">{{ videoInfo.title || '视频标题处test1' }}</h1>
           <p class="video-author">作者名称: {{ videoInfo.author || 'test user' }}</p>
           <div class="video-player">
-            <div class="player-placeholder">
+            <video 
+              v-if="videoUrl" 
+              :src="videoUrl" 
+              controls 
+              class="video-element"
+              @error="handleVideoError"
+            >
+              您的浏览器不支持视频播放
+            </video>
+            <div v-else class="player-placeholder">
               <div class="player-logo">M</div>
             </div>
           </div>
@@ -87,6 +96,7 @@ const currentUser = ref(null)
 const newComment = ref('')
 const comments = ref([])
 const videoInfo = ref({ title: '视频标题处test1', author: 'test user' })
+const videoUrl = ref('')
 
 onMounted(() => {
   // 检查是否已登录
@@ -105,7 +115,7 @@ onMounted(() => {
   loadComments()
 })
 
-const loadVideoInfo = () => {
+const loadVideoInfo = async () => {
   const videoId = route.params.id
   if (videoId) {
     const allWorks = JSON.parse(localStorage.getItem('works') || '[]')
@@ -116,8 +126,41 @@ const loadVideoInfo = () => {
         author: work.author,
         description: work.description
       }
+      // 加载视频URL
+      if (work.videoStored) {
+        // 如果视频存储在IndexedDB中
+        try {
+          const { getVideoFromDB } = await import('@/utils/storage')
+          const url = await getVideoFromDB(work.id)
+          if (url) {
+            videoUrl.value = url
+          } else {
+            videoUrl.value = '/演示视频自我介绍.mp4'
+          }
+        } catch (error) {
+          console.error('加载视频失败:', error)
+          videoUrl.value = '/演示视频自我介绍.mp4'
+        }
+      } else if (work.videoData) {
+        // 兼容旧的base64格式
+        videoUrl.value = work.videoData
+      } else {
+        // 否则使用演示视频
+        videoUrl.value = '/演示视频自我介绍.mp4'
+      }
+    } else {
+      // 如果没有找到作品，使用演示视频
+      videoUrl.value = '/演示视频自我介绍.mp4'
     }
+  } else {
+    // 没有ID时使用演示视频
+    videoUrl.value = '/演示视频自我介绍.mp4'
   }
+}
+
+const handleVideoError = () => {
+  console.error('视频加载失败')
+  alert('视频加载失败，请检查视频文件')
 }
 
 const loadComments = () => {
@@ -174,8 +217,9 @@ const goToLogin = () => {
 }
 
 const handleAvatarClick = () => {
-  // 可以在这里添加用户菜单功能
-  console.log('点击了用户头像')
+  if (currentUser.value) {
+    router.push(`/profile/${currentUser.value.username}`)
+  }
 }
 </script>
 
@@ -356,6 +400,13 @@ const handleAvatarClick = () => {
   border-radius: 8px;
   overflow: hidden;
   position: relative;
+}
+
+.video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #000;
 }
 
 .player-placeholder {

@@ -39,7 +39,10 @@
           <div class="success-content">
             <div class="success-icon">✓</div>
             <h1 class="success-title">上传成功</h1>
-            <button class="back-home-btn" @click="goToHome">返回首页</button>
+            <div class="button-group">
+              <button class="back-home-btn" @click="goToHome">返回首页</button>
+              <button class="manage-works-btn" @click="goToManage">查看我的作品</button>
+            </div>
           </div>
         </div>
       </div>
@@ -69,12 +72,18 @@ const goToHome = () => {
   router.push('/dashboard')
 }
 
+const goToManage = () => {
+  router.push('/manage')
+}
+
 const goToLogin = () => {
   router.push('/login')
 }
 
 const handleAvatarClick = () => {
-  console.log('点击了用户头像')
+  if (currentUser.value) {
+    router.push(`/profile/${currentUser.value.username}`)
+  }
 }
 </script>
 
@@ -293,7 +302,14 @@ const handleAvatarClick = () => {
   margin-bottom: 40px;
 }
 
-.back-home-btn {
+.button-group {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+.back-home-btn,
+.manage-works-btn {
   padding: 15px 40px;
   background-color: #DCE2FC;
   color: #09147D;
@@ -305,7 +321,8 @@ const handleAvatarClick = () => {
   transition: all 0.3s;
 }
 
-.back-home-btn:hover {
+.back-home-btn:hover,
+.manage-works-btn:hover {
   background-color: #09147D;
   color: #fff;
 }

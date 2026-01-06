@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="header-right">
-        <div v-if="isLoggedIn" class="user-avatar" @click="handleAvatarClick">
+        <div v-if="isLoggedIn" class="user-avatar" @click="goToProfile">
           <img v-if="currentUser?.avatar" :src="currentUser.avatar" alt="用户头像" class="avatar-img" />
           <div v-else class="avatar-placeholder">👤</div>
         </div>
@@ -44,7 +44,13 @@
     <main class="main-content">
       <h2 class="section-title">推荐</h2>
       <div class="content-grid">
-        <div v-for="item in contentItems" :key="item.id" class="content-card" @click="goToVideo(item.id)">
+        <div 
+          v-for="item in contentItems" 
+          :key="item.id" 
+          class="content-card"
+          :class="{ 'clickable': canPlayVideo(item.category) || canViewGraphic(item.category) }"
+          @click="handleCardClick(item)"
+        >
           <div class="card-thumbnail">
             <img :src="item.cover || '/back.jpeg'" alt="作品封面" />
           </div>
@@ -90,24 +96,106 @@ onMounted(() => {
     isLoggedIn.value = false
   }
   
+  // 初始化示例图文作品（影集官方）
+  initOfficialGraphic()
+  
   // 加载上传的作品
   loadWorks()
 })
+
+const initOfficialGraphic = () => {
+  // 检查是否已存在官方作品
+  const allWorks = JSON.parse(localStorage.getItem('works') || '[]')
+  const hasOfficial = allWorks.some(w => w.id === 'official')
+  
+  if (!hasOfficial) {
+    const officialWork = {
+      id: 'official',
+      type: 'graphic',
+      title: 'HI! 看这里! 欢迎各位大学生来到影集!',
+      content: '欢迎你们, 大学生。这里是属于你们的舞台。\n欢迎各位积极展示自己的作品哦, 期待你们的表现~',
+      author: '影集官方',
+      authorAvatar: '/头像.png',
+      cover: '/back.jpeg',
+      images: ['/nya.jpg'],
+      tags: ['官方'],
+      createdAt: new Date('2026-01-06T11:10:00').toISOString()
+    }
+    allWorks.push(officialWork)
+    localStorage.setItem('works', JSON.stringify(allWorks))
+  }
+}
 
 const loadWorks = () => {
   const allWorks = JSON.parse(localStorage.getItem('works') || '[]')
   // 如果有上传的作品，添加到内容列表中
   if (allWorks.length > 0) {
-    const workItems = allWorks.map(work => ({
-      id: work.id,
-      icon: work.type === 'video' ? '🎬' : work.type === 'software' ? '💻' : work.type === 'graphic' ? '🎨' : '🎵',
-      type: work.type === 'video' ? '视频' : work.type === 'software' ? '软件' : work.type === 'graphic' ? '图文' : '音频',
-      title: work.title,
-      category: work.tags?.[0] || '未分类',
-      cover: work.cover
-    }))
+    const workItems = allWorks.map(work => {
+      // 根据作品类型和标签确定分类
+      let category = work.tags?.[0] || '未分类'
+      // 如果是视频类型，确保分类正确
+      if (work.type === 'video') {
+        // 如果标签中包含剪辑、动画、摄影等，使用该标签作为分类
+        if (work.tags && work.tags.some(tag => ['剪辑', '动画', '摄影'].includes(tag))) {
+          category = work.tags.find(tag => ['剪辑', '动画', '摄影'].includes(tag))
+        } else {
+          category = '剪辑' // 默认分类为剪辑
+        }
+      }
+      // 如果是图文类型，根据标签确定分类
+      else if (work.type === 'graphic') {
+        if (work.tags && work.tags.some(tag => ['UI设计', '绘画'].includes(tag))) {
+          category = work.tags.find(tag => ['UI设计', '绘画'].includes(tag))
+        } else if (work.id === 'official') {
+          category = 'UI设计' // 官方作品默认显示在UI设计分类
+        }
+      }
+      
+      return {
+        id: work.id,
+        icon: work.type === 'video' ? '🎬' : work.type === 'software' ? '💻' : work.type === 'graphic' ? '🎨' : '🎵',
+        type: work.type === 'video' ? '视频' : work.type === 'software' ? '软件' : work.type === 'graphic' ? '图文' : '音频',
+        title: work.title,
+        category: category,
+        cover: work.cover,
+        workType: work.type // 保存原始类型用于判断
+      }
+    })
     // 合并到现有内容中
     contentItems.value = [...contentItems.value, ...workItems]
+  }
+}
+
+const canPlayVideo = (category) => {
+  // 只有动画、摄影、视频剪辑分类可以播放视频
+  return category === '动画' || category === '摄影' || category === '剪辑'
+}
+
+const canViewGraphic = (category) => {
+  // 绘画和UI设计分类可以查看图文
+  return category === '绘画' || category === 'UI设计'
+}
+
+const handleCardClick = (item) => {
+  // 根据作品类型判断跳转
+  if (item.workType === 'video') {
+    // 视频类作品跳转到视频播放页面
+    goToVideo(item.id)
+  } else if (item.workType === 'graphic') {
+    // 图文类作品跳转到图文展示页面
+    goToGraphic(item.id)
+  } else {
+    // 其他类型根据分类判断（兼容测试数据）
+    if (canPlayVideo(item.category)) {
+      goToVideo(item.id)
+    } else if (canViewGraphic(item.category)) {
+      // 如果是UI设计或绘画分类的测试作品，跳转到官方图文
+      if (item.id === 3 || item.id === 6) {
+        goToGraphic('official')
+      } else {
+        goToGraphic(item.id)
+      }
+    }
   }
 }
 
@@ -123,9 +211,12 @@ const goToVideo = (id) => {
   router.push(`/video/${id}`)
 }
 
-const handleAvatarClick = () => {
-  // 可以在这里添加用户菜单功能
-  console.log('点击了用户头像')
+const goToGraphic = (id) => {
+  router.push(`/graphic/${id}`)
+}
+
+const goToProfile = () => {
+  router.push(`/profile/${currentUser.value.username}`)
 }
 </script>
 
@@ -345,10 +436,13 @@ const handleAvatarClick = () => {
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.content-card.clickable {
   cursor: pointer;
 }
 
-.content-card:hover {
+.content-card.clickable:hover {
   transform: translateY(-5px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }

@@ -96,6 +96,22 @@
             ></textarea>
           </div>
 
+          <!-- 作品分类 -->
+          <div class="category-section">
+            <label class="section-label">作品分类:</label>
+            <div class="category-grid">
+              <button 
+                v-for="category in videoCategories" 
+                :key="category"
+                class="category-btn"
+                :class="{ active: selectedCategory === category }"
+                @click="selectedCategory = category"
+              >
+                {{ category }}
+              </button>
+            </div>
+          </div>
+
           <!-- 内容标签 -->
           <div class="tags-section">
             <label class="section-label">
@@ -126,7 +142,7 @@
           </div>
 
           <!-- 下一步按钮 -->
-          <button class="next-btn" @click="submitVideo" :disabled="!videoFile || !videoTitle">
+          <button class="next-btn" @click="submitVideo" :disabled="!videoFile || !videoTitle || !selectedCategory">
             下一步
           </button>
         </div>
@@ -148,7 +164,9 @@ const videoFile = ref(null)
 const coverPreview = ref(null)
 const videoTitle = ref('')
 const videoDescription = ref('')
-const tags = ref(['剪辑', '动画'])
+const selectedCategory = ref('')
+const videoCategories = ['动画', '摄影', '视频剪辑', '其它']
+const tags = ref([])
 const showAddTag = ref(false)
 const newTag = ref('')
 
@@ -171,7 +189,11 @@ const triggerVideoUpload = () => {
 const handleVideoSelect = (event) => {
   const file = event.target.files[0]
   if (file) {
-    videoFile.value = file
+    if (file.type.startsWith('video/')) {
+      videoFile.value = file
+    } else {
+      alert('请上传视频文件')
+    }
   }
 }
 
@@ -179,6 +201,8 @@ const handleVideoDrop = (event) => {
   const file = event.dataTransfer.files[0]
   if (file && file.type.startsWith('video/')) {
     videoFile.value = file
+  } else {
+    alert('请上传视频文件')
   }
 }
 
@@ -221,36 +245,92 @@ const cancelAddTag = () => {
   showAddTag.value = false
 }
 
-const submitVideo = () => {
-  if (!videoFile.value || !videoTitle.value) {
-    alert('请上传视频并填写标题')
+const submitVideo = async () => {
+  if (!videoFile.value) {
+    alert('请上传视频文件')
+    return
+  }
+  
+  if (!videoTitle.value || !videoTitle.value.trim()) {
+    alert('请填写视频标题')
     return
   }
 
   // 获取当前用户
   const user = currentUser.value
+  if (!user) {
+    alert('请先登录')
+    router.push('/login')
+    return
+  }
+
+  // 检查文件大小（限制为100MB，超过则提示）
+  const maxSize = 100 * 1024 * 1024 // 100MB
+  if (videoFile.value.size > maxSize) {
+    if (!confirm(`视频文件较大（${(videoFile.value.size / 1024 / 1024).toFixed(2)}MB），可能会影响加载速度。是否继续上传？`)) {
+      return
+    }
+  }
+
+  const workId = Date.now()
+
+  // 使用IndexedDB存储视频文件
+  let videoStored = false
+  try {
+    // 检查浏览器是否支持IndexedDB
+    if (!window.indexedDB) {
+      throw new Error('浏览器不支持IndexedDB')
+    }
+    
+    const { saveVideoToDB } = await import('@/utils/storage')
+    await saveVideoToDB(workId, videoFile.value)
+    videoStored = true
+  } catch (error) {
+    console.error('保存视频到IndexedDB失败:', error)
+    // 如果IndexedDB失败，询问用户是否继续（不存储视频文件）
+    const continueWithoutVideo = confirm('视频文件存储失败，是否继续上传作品信息（视频文件将不会保存）？\n错误信息：' + error.message)
+    if (!continueWithoutVideo) {
+      return
+    }
+  }
+
+  // 确保选择了分类
+  if (!selectedCategory.value) {
+    alert('请选择作品分类')
+    return
+  }
+
+  // 创建标签数组，将分类放在第一位
+  const finalTags = [selectedCategory.value, ...tags.value]
 
   // 创建作品对象
   const work = {
-    id: Date.now(),
+    id: workId,
     type: 'video',
-    title: videoTitle.value,
-    description: videoDescription.value || '',
+    title: videoTitle.value.trim(),
+    description: videoDescription.value.trim() || '',
     author: user.username,
     authorAvatar: user.avatar || '/aka.jpg',
     cover: coverPreview.value || '/back.jpeg',
-    tags: [...tags.value],
-    videoFile: videoFile.value.name, // 实际项目中应该上传文件到服务器
+    tags: finalTags,
+    videoFile: videoFile.value.name,
+    videoSize: videoFile.value.size,
+    videoStored: videoStored, // 标记视频是否已存储到IndexedDB
     createdAt: new Date().toISOString()
   }
 
   // 保存作品到localStorage
-  const works = JSON.parse(localStorage.getItem('works') || '[]')
-  works.push(work)
-  localStorage.setItem('works', JSON.stringify(works))
-
-  // 跳转到上传成功页面
-  router.push('/upload/success')
+  try {
+    const works = JSON.parse(localStorage.getItem('works') || '[]')
+    works.push(work)
+    localStorage.setItem('works', JSON.stringify(works))
+    
+    // 跳转到上传成功页面
+    router.push('/upload/success')
+  } catch (error) {
+    console.error('保存作品信息失败:', error)
+    alert('保存作品信息失败：' + error.message)
+  }
 }
 
 const goToHome = () => {
@@ -262,7 +342,9 @@ const goToLogin = () => {
 }
 
 const handleAvatarClick = () => {
-  console.log('点击了用户头像')
+  if (currentUser.value) {
+    router.push(`/profile/${currentUser.value.username}`)
+  }
 }
 </script>
 
@@ -602,6 +684,39 @@ const handleAvatarClick = () => {
 
 .form-textarea {
   resize: vertical;
+}
+
+/* 作品分类区域 */
+.category-section {
+  margin-bottom: 30px;
+}
+
+.category-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.category-btn {
+  padding: 12px 24px;
+  background-color: #7C93F2;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.category-btn:hover {
+  background-color: #6B82E0;
+  transform: translateY(-2px);
+}
+
+.category-btn.active {
+  background-color: #A77CF2;
+  font-weight: bold;
 }
 
 /* 标签区域 */

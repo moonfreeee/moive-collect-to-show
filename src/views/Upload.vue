@@ -56,7 +56,7 @@
             <button 
               class="next-btn" 
               @click="goToNextStep"
-              :disabled="!selectedType || (selectedType !== 'video')"
+              :disabled="!selectedType || (selectedType !== 'video' && selectedType !== 'graphic')"
             >
               下一步
             </button>
@@ -104,6 +104,8 @@ const selectType = (typeId) => {
 const goToNextStep = () => {
   if (selectedType.value === 'video') {
     router.push('/upload/video')
+  } else if (selectedType.value === 'graphic') {
+    router.push('/upload/graphic')
   } else {
     alert('该类型作品上传功能暂未开放')
   }
@@ -118,7 +120,9 @@ const goToLogin = () => {
 }
 
 const handleAvatarClick = () => {
-  console.log('点击了用户头像')
+  if (currentUser.value) {
+    router.push(`/profile/${currentUser.value.username}`)
+  }
 }
 </script>
 
@@ -425,3 +429,4 @@ const handleAvatarClick = () => {
   }
 }
 </style>
+
